@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telegram-dm-assistant"
+version = "0.1.0"
+description = "Local, opt-in personal Telegram DM draft assistant"
+requires-python = ">=3.11"
+dependencies = ["telethon>=1.36,<2", "python-dotenv>=1,<2"]
+
+[project.scripts]
+telegram-dm-assistant = "telegram_dm_assistant.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.9,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/telegram_dm_assistant"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
