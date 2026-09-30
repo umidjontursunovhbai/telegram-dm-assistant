@@ -15,6 +15,23 @@ def test_check_mode_does_not_create_client_or_connect(monkeypatch, capsys):
     assert "private-key" not in capsys.readouterr().out
 
 
+def test_login_mode_authenticates_without_listener(monkeypatch):
+    from telegram_dm_assistant import main
+
+    calls = []
+
+    async def fake_login(config):
+        calls.append(config.api_id)
+
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "dummy")
+    monkeypatch.setenv("LLM_API_KEY", "dummy")
+    monkeypatch.setenv("LLM_MODEL", "dummy")
+    monkeypatch.setattr(main, "login", fake_login, raising=False)
+    assert main.main(["--login"]) == 0
+    assert calls == [123]
+
+
 def test_no_mode_never_connects(monkeypatch):
     from telegram_dm_assistant import main
 
