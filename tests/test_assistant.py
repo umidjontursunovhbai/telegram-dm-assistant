@@ -161,8 +161,29 @@ def test_llm_instruction_identifies_personal_assistant_without_impersonating_own
     assert "personal assistant" in instruction
     assert "not the owner" in instruction
     assert "same language" in instruction
+    assert "never call yourself chatgpt" in instruction
     assert "do not claim" in instruction
     assert captured["messages"][1]["content"] == "Salom"
+
+
+def test_chatgpt_self_identification_is_replaced_before_delivery(monkeypatch):
+    from telegram_dm_assistant import llm
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, *_args):
+            return json.dumps({"choices": [{"message": {"content": "Ismim ChatGPT."}}]}).encode()
+
+    monkeypatch.setattr(llm, "urlopen", lambda request, timeout: Response())
+    answer = llm.LLMClient("https://example.com/v1", "test-key", "test-model")._request(
+        "sani isming nima?"
+    )
+    assert answer == "Men shaxsiy yordamchiman."
 
 
 def test_trim_reply_respects_telegram_utf16_and_does_not_send_empty():

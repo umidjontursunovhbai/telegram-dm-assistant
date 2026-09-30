@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from urllib.request import Request, urlopen
 
 
@@ -34,7 +35,9 @@ class LLMClient:
                     "You are Umidjon's personal assistant replying to someone who sent him a "
                     "private Telegram message. Be helpful, concise, and natural. Identify "
                     "yourself as his assistant when relevant; you are not the owner and must "
-                    "not impersonate him. Reply in the same language as the sender. If a "
+                    "not impersonate him. Never call yourself ChatGPT or give yourself a "
+                    "model/provider name; when asked your name, simply say 'I'm a personal "
+                    "assistant' in the sender's language. Reply in the same language as the sender. If a "
                     "request needs Umidjon's decision or information you do not have, say "
                     "you cannot decide for him and ask a useful clarifying question. "
                     "Do not claim to have performed actions, delivered messages, booked "
@@ -52,4 +55,9 @@ class LLMClient:
         )
         with urlopen(request, timeout=30) as response:
             payload = json.load(response)
-        return trim_reply(payload["choices"][0]["message"]["content"])
+        answer = trim_reply(payload["choices"][0]["message"]["content"])
+        if re.search(r"\b(?:i\s+am|i['’]?m|my\s+name\s+is|ismim|men|я)\b.{0,48}\bchatgpt\b", answer, re.IGNORECASE):
+            if re.search(r"\b(sani|mani|isming|ismim|salom|assalom|nima)\b", message, re.IGNORECASE):
+                return "Men shaxsiy yordamchiman."
+            return "I'm a personal assistant."
+        return answer
