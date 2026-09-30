@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -132,6 +133,36 @@ async def test_explicit_send_replies_only_once_to_allowlisted_user(tmp_path):
         await assistant.handle(event)
         assert event.replies == ["Hello back"]
         assert store.drafts() == []
+
+
+def test_llm_instruction_identifies_personal_assistant_without_impersonating_owner(monkeypatch):
+    from telegram_dm_assistant import llm
+
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, *_args):
+            return json.dumps({"choices": [{"message": {"content": "Salom!"}}]}).encode()
+
+    def fake_urlopen(request, timeout):
+        captured.update(json.loads(request.data))
+        return Response()
+
+    monkeypatch.setattr(llm, "urlopen", fake_urlopen)
+    answer = llm.LLMClient("https://example.com/v1", "test-key", "test-model")._request("Salom")
+    instruction = captured["messages"][0]["content"].lower()
+    assert answer == "Salom!"
+    assert "personal assistant" in instruction
+    assert "not the owner" in instruction
+    assert "same language" in instruction
+    assert "do not claim" in instruction
+    assert captured["messages"][1]["content"] == "Salom"
 
 
 def test_trim_reply_respects_telegram_utf16_and_does_not_send_empty():

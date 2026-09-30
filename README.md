@@ -1,26 +1,55 @@
-# telegram-dm-assistant
+# Telegram DM Assistant
 
-A standalone local Telegram **owner-account** DM assistant using Telethon. By default it writes generated replies to a private SQLite draft database; it does **not** send messages. No tasks, groups, channels, bot commands, or background service are included.
+A personal assistant for your Telegram inbox. It replies to people who DM your account, using AI to answer simple questions or ask for details when something needs your decision. It speaks as your assistant, not as you. It doesn't create tasks, read groups or channels, or require people to message a bot.
 
-## Setup
+You choose how it behaves:
 
-1. Install [uv](https://docs.astral.sh/uv/) and run `uv sync --dev` from this directory (Python 3.11+).
-2. Copy `.env.example` to `.env`. Get your **own** Telegram API ID/hash from [my.telegram.org](https://my.telegram.org). Set `TG_API_ID` and `TG_API_HASH` locally. This is a user session, **not** a bot token. Never commit the session file, API hash, or LLM key.
-3. Choose `LLM_BACKEND=openrouter` or `openai`; set `LLM_API_KEY` and `LLM_MODEL` for your own account. Defaults: OpenRouter `https://openrouter.ai/api/v1` or OpenAI `https://api.openai.com/v1`; `LLM_BASE_URL` can override with an HTTPS OpenAI-compatible endpoint. DMs are sent to this LLM provider for drafting, even in draft-only mode. Do not use this tool for sensitive conversations without the correspondent's knowledge/consent.
-4. For selected people, use numeric IDs in `DM_ALLOWED_USER_IDS=123456,789012`. Empty means nothing is processed unless `DM_ALLOW_ALL=true` is explicitly set. To answer **every incoming human private DM**, set `DM_ALLOW_ALL=true` and `DM_SEND_ENABLED=true`. This sends LLM-generated replies from your account to people who message you; it excludes your own messages, bots, and groups. Keep both false until intentionally activating. Do not copy a bot token into this project.
-5. Run `uv run telegram-dm-assistant --check` to validate configuration **offline**. If Telegram login is needed, run `uv run telegram-dm-assistant --login` in your own interactive terminal and enter the login code/2FA there (never in chat); this only authenticates and creates the private `data/owner.session`, without listening or sending. Then run `uv run telegram-dm-assistant --run` to listen. No listener starts merely from importing, checking, or logging in.
+- **Draft mode:** save a suggested reply locally without sending it. This is the default.
+- **Auto-reply mode:** send the suggested reply from your account, either to selected people or to anyone who sends you a private message.
 
-Drafts are stored at `data/drafts.sqlite3` (or `$DM_DATA_DIR/drafts.sqlite3`) and may contain sensitive message content. The data directory must have mode 0700 and the draft database mode 0600. Session and data files are ignored by Git. Inspect drafts with a local SQLite reader; they are never sent automatically. To deliberately enable automatic replies, set `DM_SEND_ENABLED=true` together with either a nonempty allowlist or `DM_ALLOW_ALL=true`, then explicitly start `--run`. Stop with Ctrl-C.
+The assistant starts with new text DMs after you turn it on. It ignores your own messages, bots, groups, channels, and old chat history. Each incoming message is handled at most once; if a reply fails, it won't retry on its own.
 
-The listener only handles newly received private messages from allowed human users, or all human DM senders when explicitly enabled (not your own account, bots, outbound messages, or groups). Per-user locks and a persistent message-ID reservation reduce duplicates across restarts. Reservations are at-most-once: a failed LLM request or Telegram send is **not** retried automatically; inspect logs and handle manually. Only the incoming text (capped at 8,000 characters) is passed to the LLM. No historical chats are fetched. Generated replies are limited to 3,500 UTF-16 code units.
+## Get started
 
-## Offline verification
+You'll need Python 3.11+, [uv](https://docs.astral.sh/uv/), a Telegram API ID and hash from [my.telegram.org](https://my.telegram.org), and an OpenRouter or OpenAI API key.
 
 ```bash
-uv sync --dev
-uv run pytest -q
-uv run ruff check .
-uv run telegram-dm-assistant --help
+uv sync
+cp .env.example .env
 ```
 
-Tests use only in-memory fake messages and a fake Telegram client; no live sends or LLM API calls. Never run `--run` in CI or during offline verification.
+Open `.env` and fill in `TG_API_ID`, `TG_API_HASH`, `LLM_API_KEY`, and `LLM_MODEL`. The default AI provider is OpenRouter; set `LLM_BACKEND=openai` if you use OpenAI instead. The `.env` file stays on your machine and is ignored by Git.
+
+Pick who the assistant can answer:
+
+```env
+# To reply only to selected people (use their numeric Telegram user IDs):
+DM_ALLOWED_USER_IDS=123456,789012
+
+# Or, to reply to any human who sends your account a private DM:
+DM_ALLOW_ALL=true
+```
+
+For drafts, leave `DM_SEND_ENABLED=false`. To actually send replies, set `DM_SEND_ENABLED=true` **and** choose an allowlist or `DM_ALLOW_ALL=true`. The assistant sends as *you*, so check this setting before starting it.
+
+Then run:
+
+```bash
+uv run telegram-dm-assistant --check  # Check settings without connecting
+uv run telegram-dm-assistant --login  # One-time Telegram login
+uv run telegram-dm-assistant --run    # Listen for new DMs
+```
+
+Enter your Telegram login code or 2FA password only in your own terminal, never in chat or GitHub. `--login` does not listen or reply. Stop a foreground listener with Ctrl-C. If you run it as a service, stop that service instead; don't start a second copy alongside it.
+
+## Where do drafts go?
+
+Drafts are saved in `data/drafts.sqlite3` on your machine (or under `DM_DATA_DIR` if you set it). This is a local SQLite file, **not a Telegram draft** that appears in the app. There is no review-and-send screen yet. To read drafts, use a local SQLite viewer. The Telegram login session is stored in `data/owner.session`; keep both files private and back them up carefully. Neither is committed to Git.
+
+## Privacy and limits
+
+To write a reply, the assistant sends the incoming message text to your configured AI provider. Avoid using it for sensitive conversations unless the other person understands that their message may be processed by an AI service. It sees only the current message, not your calendar, tasks, other chats, or past messages. It cannot make decisions or take actions for you. Only new text DMs are handled; media-only messages are skipped. Replies can be wrong or inappropriate, so use draft mode or restrict the allowlist if you want more control. Failed replies are not automatically retried.
+
+## For contributors
+
+Run the offline checks with `uv sync --dev`, `uv run pytest -q`, and `uv run ruff check .`. Tests use fake Telegram events and do not send messages.
