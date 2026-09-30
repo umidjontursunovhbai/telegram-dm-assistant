@@ -50,7 +50,21 @@ def test_config_fails_closed_without_opt_in(monkeypatch):
     assert not config.send_enabled
 
 
+def test_config_explicit_allow_all_enables_send_without_ids(monkeypatch):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "placeholder")
+    monkeypatch.setenv("LLM_API_KEY", "dummy")
+    monkeypatch.setenv("LLM_MODEL", "dummy")
+    monkeypatch.setenv("DM_ALLOWED_USER_IDS", "")
+    monkeypatch.setenv("DM_ALLOW_ALL", "true")
+    monkeypatch.setenv("DM_SEND_ENABLED", "true")
+    config = Config.from_env()
+    assert config.allow_all
+    assert config.send_enabled
+
+
 def test_config_rejects_send_without_allowlist(monkeypatch):
+    monkeypatch.setenv("DM_ALLOW_ALL", "false")
     monkeypatch.setenv("TG_API_ID", "123")
     monkeypatch.setenv("TG_API_HASH", "placeholder")
     monkeypatch.setenv("DM_ALLOWED_USER_IDS", "")
@@ -75,6 +89,21 @@ async def test_unsafe_events_never_generate_or_reply(tmp_path, changes):
         assert not generator.calls
         assert not event.replies
         assert store.drafts() == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_allow_all_replies_to_human_dms_only(tmp_path):
+    generator = Generator()
+    with DraftStore(tmp_path / "drafts.sqlite3") as store:
+        assistant = DMAssistant(1, frozenset(), True, generator, store, allow_all=True)
+        human = Event(sender_id=99, chat_id=99)
+        bot = Event(sender_id=88, chat_id=88, bot=True)
+        group = Event(sender_id=77, chat_id=-77, is_private=False)
+        for event in (human, bot, group):
+            await assistant.handle(event)
+        assert human.replies == ["Hello back"]
+        assert bot.replies == group.replies == []
+        assert generator.calls == ["hello"]
 
 
 @pytest.mark.asyncio

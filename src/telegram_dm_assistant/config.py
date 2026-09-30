@@ -22,6 +22,7 @@ class Config:
     llm_model: str
     llm_base_url: str
     data_dir: Path
+    allow_all: bool = False
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -33,8 +34,9 @@ class Config:
         except ValueError as exc:
             raise ValueError("DM_ALLOWED_USER_IDS must be comma-separated positive numeric IDs") from exc
         send = _enabled(os.getenv("DM_SEND_ENABLED", "false"))
-        if send and not allowed:
-            raise ValueError("Cannot enable sending without a nonempty allowlist")
+        allow_all = _enabled(os.getenv("DM_ALLOW_ALL", "false"))
+        if send and not (allowed or allow_all):
+            raise ValueError("Cannot enable sending without an allowlist or DM_ALLOW_ALL=true")
         backend = os.getenv("LLM_BACKEND", "openrouter").lower()
         if backend not in {"openrouter", "openai"}:
             raise ValueError("LLM_BACKEND must be openrouter or openai")
@@ -54,5 +56,5 @@ class Config:
             raise ValueError("TG_API_ID and TG_API_HASH must be valid")
         return cls(
             api_id, api_hash, allowed, send, backend, key, model, url,
-            Path(os.getenv("DM_DATA_DIR", "data")).resolve(),
+            Path(os.getenv("DM_DATA_DIR", "data")).resolve(), allow_all,
         )

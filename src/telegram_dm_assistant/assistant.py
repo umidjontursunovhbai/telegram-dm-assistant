@@ -53,9 +53,10 @@ class DraftStore:
 
 
 class DMAssistant:
-    def __init__(self, owner_id, allowed_ids, send_enabled, generator, store):
+    def __init__(self, owner_id, allowed_ids, send_enabled, generator, store, allow_all=False):
         self.owner_id = owner_id
         self.allowed_ids = allowed_ids
+        self.allow_all = allow_all
         self.send_enabled = send_enabled
         self.generator = generator
         self.store = store
@@ -66,7 +67,8 @@ class DMAssistant:
         sender_id = event.sender_id
         if (
             event.out or not event.is_private or sender_id is None
-            or sender_id == self.owner_id or sender_id not in self.allowed_ids
+            or sender_id == self.owner_id
+            or (not self.allow_all and sender_id not in self.allowed_ids)
             or event.chat_id != sender_id or not event.raw_text.strip()
             or event.date.replace(tzinfo=event.date.tzinfo or UTC) < self.started
         ):
@@ -74,7 +76,7 @@ class DMAssistant:
         sender = await event.get_sender()
         if sender is None or getattr(sender, "bot", False):
             return
-        async with self.locks[sender_id]:
+        async with self.locks.setdefault(sender_id, asyncio.Lock()):
             if not self.store.reserve(sender_id, event.id):
                 return
             answer = trim_reply(await self.generator.generate(event.raw_text[:8000]))

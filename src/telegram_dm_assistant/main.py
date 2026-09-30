@@ -26,6 +26,7 @@ async def run(config: Config) -> None:
             assistant = DMAssistant(
                 owner.id, config.allowed_user_ids, config.send_enabled,
                 LLMClient(config.llm_base_url, config.llm_api_key, config.llm_model), store,
+                allow_all=config.allow_all,
             )
             client.add_event_handler(
                 assistant.handle, events.NewMessage(incoming=True, func=lambda event: event.is_private)
