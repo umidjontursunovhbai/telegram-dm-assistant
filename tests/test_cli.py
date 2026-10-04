@@ -70,9 +70,10 @@ async def test_runtime_registers_incoming_private_handler_without_sending(tmp_pa
     client = Client()
     monkeypatch.setattr(main, "TelegramClient", lambda *args, **kwargs: client)
     config = Config(123, "placeholder", frozenset(), True, "openrouter", "dummy", "model",
-                    "https://example.com/v1", tmp_path / "data", True)
+                    "https://example.com/v1", tmp_path / "data", True, frozenset({42}))
     await main.run(config)
     assert client.handler.__self__.allow_all
+    assert client.handler.__self__.excluded_ids == frozenset({42})
     assert client.disconnected
     assert client.filter.incoming is True
     assert client.filter.func is not None

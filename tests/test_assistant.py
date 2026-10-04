@@ -51,6 +51,23 @@ def test_config_fails_closed_without_opt_in(monkeypatch):
     assert not config.send_enabled
 
 
+@pytest.mark.parametrize("raw", ["42, 99", "", "oops", "-1", "0"])
+def test_excluded_ids_config_is_validated(monkeypatch, raw):
+    monkeypatch.setenv("TG_API_ID", "123")
+    monkeypatch.setenv("TG_API_HASH", "placeholder")
+    monkeypatch.setenv("LLM_API_KEY", "dummy")
+    monkeypatch.setenv("LLM_MODEL", "dummy")
+    monkeypatch.setenv("DM_SEND_ENABLED", "false")
+    monkeypatch.setenv("DM_EXCLUDED_USER_IDS", raw)
+    if raw in {"oops", "-1", "0"}:
+        with pytest.raises(ValueError, match="DM_EXCLUDED_USER_IDS"):
+            Config.from_env()
+    else:
+        assert Config.from_env().excluded_user_ids == (
+            frozenset({42, 99}) if raw else frozenset()
+        )
+
+
 def test_config_explicit_allow_all_enables_send_without_ids(monkeypatch):
     monkeypatch.setenv("TG_API_ID", "123")
     monkeypatch.setenv("TG_API_HASH", "placeholder")
@@ -184,6 +201,25 @@ def test_chatgpt_self_identification_is_replaced_before_delivery(monkeypatch):
         "sani isming nima?"
     )
     assert answer == "Men shaxsiy yordamchiman."
+
+
+@pytest.mark.parametrize("allow_all", [True, False])
+@pytest.mark.asyncio
+async def test_excluded_account_never_generates_or_replies(tmp_path, allow_all):
+    generator = Generator()
+    with DraftStore(tmp_path / "drafts.sqlite3") as store:
+        assistant = DMAssistant(
+            1, frozenset({42, 99}), True, generator, store,
+            allow_all=allow_all, excluded_ids=frozenset({42}),
+        )
+        blocked = Event()
+        other = Event(sender_id=99, chat_id=99)
+        await assistant.handle(blocked)
+        assert not generator.calls
+        assert not blocked.replies
+        assert store.db.execute("SELECT COUNT(*) FROM seen").fetchone()[0] == 0
+        await assistant.handle(other)
+        assert other.replies == ["Hello back"]
 
 
 def test_trim_reply_respects_telegram_utf16_and_does_not_send_empty():
